@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	_ "song-library/docs"
 	"song-library/models"
@@ -42,7 +44,6 @@ func (h *SongHandler) GetSongs(c *gin.Context) {
 
 	group := c.Query("group") //фильтр по группе
 	song := c.Query("song")   //фмльтр по песне
-	// releaseDate := c.Query("releaseDate") //фильтр по дате релиза
 
 	query := h.DB.Model(&models.Song{})
 
@@ -90,7 +91,7 @@ func (h *SongHandler) GetSongText(c *gin.Context) {
 	id := c.Param("id")
 	var song models.Song
 	h.DB.First(&song, id)
-	c.JSON(http.StatusOK, gin.H{"text": song.Text})
+	c.JSON(http.StatusOK, gin.H{"text": song.SongDetails.Text})
 }
 
 // Редактировать песню по ID
@@ -139,38 +140,86 @@ func (h *SongHandler) DeleteSong(c *gin.Context) {
 // @Router /songs [post]
 func (h *SongHandler) AddSong(c *gin.Context) {
 
-	var request struct {
-		Group       string `json:"group"`
-		Song        string `json:"song"`
-		ReleaseDate string `json:"releaseDate"` // Используем строку для разбора
-		Text        string `json:"text"`
-		Link        string `json:"link"`
-	}
+	var song models.Song
 
-	err := c.BindJSON(&request)
+	err := c.BindJSON(&song)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		log.Println(err)
 		return
 	}
 
-	releaseDate, err := time.Parse("02.01.2006", request.ReleaseDate)
+	songDetails, err := GetSongInfo(song.Song, song.Group)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
 		log.Println(err)
-		return
 	}
 
-	song := models.Song{
-		Group:       request.Group,
-		Song:        request.Song,
-		ReleaseDate: releaseDate,
-		Text:        request.Text,
-		Link:        request.Link,
-	}
+	song.SongDetails = *songDetails
 
-	h.DB.Create(&song)
+	// var request struct {
+	// 	ReleaseDate string `json:"releaseDate"` // Используем строку для разбора
+	// 	Text        string `json:"text"`
+	// 	Link        string `json:"link"`
+	// }
+
+	// err = c.BindJSON(&request)
+	// if err != nil {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// 	log.Println(err)
+	// 	return
+	// }
+
+	// releaseDate, err := time.Parse("02.01.2006", request.ReleaseDate)
+	// if err != nil {
+	// 	c.JSON(http.StatusBadRequest, gin.H{
+	// 		"error": err.Error(),
+	// 	})
+	// 	log.Println(err)
+	// 	return
+	// }
+
+	// song := models.Song{
+	// 	Group:       request.Group,
+	// 	Song:        request.Song,
+	// 	ReleaseDate: releaseDate,
+	// 	Text:        request.Text,
+	// 	Link:        request.Link,
+	// }
+
+	// h.DB.Create(&song)
 	c.JSON(http.StatusOK, song)
+}
+
+func GetSongInfo(song string, group string) (*models.SongDetails, error) {
+
+	// req, err := http.NewRequest("GET", "/info", nil)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("ошибка при создании запроса: %v", err)
+	// }
+
+	// req.URL.Query().Set()
+
+	url := fmt.Sprintf("localhost:8081/info?song=%s&group=%s", song, group)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при получении ответа от сервера: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var songDetail models.SongDetails
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при получении тела ответа от сервера: %v", err)
+	}
+
+	err = json.Unmarshal(data, &songDetail)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при анмаршалинга ответа от сервера: %v", err)
+	}
+
+	fmt.Printf("%+v\n", songDetail)
+
+	return &songDetail, nil
 }

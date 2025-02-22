@@ -216,20 +216,28 @@ const docTemplate = `{
             "description": "Модель песни",
             "type": "object",
             "properties": {
+                "SongDetail": {
+                    "$ref": "#/definitions/models.SongDetails"
+                },
                 "group": {
                     "description": "Название группы",
                     "type": "string"
                 },
+                "song": {
+                    "description": "Название песни",
+                    "type": "string"
+                }
+            }
+        },
+        "models.SongDetails": {
+            "type": "object",
+            "properties": {
                 "link": {
                     "description": "Ссылка на песню",
                     "type": "string"
                 },
                 "releaseDate": {
                     "description": "Дата выхода песни",
-                    "type": "string"
-                },
-                "song": {
-                    "description": "Название песни",
                     "type": "string"
                 },
                 "text": {

@@ -10,8 +10,12 @@ import (
 // @Description Модель песни
 type Song struct {
 	gorm.Model  `swaggerignore:"true"`
-	Group       string    `json:"group"`       //Название группы
-	Song        string    `json:"song"`        //Название песни
+	Group       string      `json:"group"` //Название группы
+	Song        string      `json:"song"`  //Название песни
+	SongDetails SongDetails `json:"SongDetail"`
+}
+
+type SongDetails struct {
 	Text        string    `json:"text"`        //Текст песни
 	ReleaseDate time.Time `json:"releaseDate"` //Дата выхода песни
 	Link        string    `json:"link"`        //Ссылка на песню

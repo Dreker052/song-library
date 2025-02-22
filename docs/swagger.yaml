@@ -3,17 +3,22 @@ definitions:
   models.Song:
     description: Модель песни
     properties:
+      SongDetail:
+        $ref: '#/definitions/models.SongDetails'
       group:
         description: Название группы
         type: string
+      song:
+        description: Название песни
+        type: string
+    type: object
+  models.SongDetails:
+    properties:
       link:
         description: Ссылка на песню
         type: string
       releaseDate:
         description: Дата выхода песни
-        type: string
-      song:
-        description: Название песни
         type: string
       text:
         description: Текст песни
