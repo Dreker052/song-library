@@ -30,6 +30,29 @@ paths:
       consumes:
       - application/json
       description: Получить список всех песен
+      parameters:
+      - description: Фильтр по группе
+        in: query
+        name: group
+        type: string
+      - description: Фильтр по названию песни
+        in: query
+        name: song
+        type: string
+      - description: Поле для сортировки
+        in: query
+        name: sort
+        type: string
+      - default: 1
+        description: Номер страницы
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Лимит записей на странице
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:

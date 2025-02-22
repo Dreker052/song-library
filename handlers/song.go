@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
+	"strconv"
+	"time"
 
 	_ "song-library/docs"
 	"song-library/models"
@@ -24,12 +27,54 @@ func NewSongHandler(db *gorm.DB) *SongHandler {
 // @Tags songs
 // @Accept json
 // @Produce json
+// @Param group query string false "Фильтр по группе"
+// @Param song query string false "Фильтр по названию песни"
+// @Param sort query string false "Поле для сортировки"
+// @Param page query int false "Номер страницы" default(1)
+// @Param limit query int false "Лимит записей на странице" default(10)
 // @Success 200 {array} models.Song
 // @Router /songs [get]
 func (h *SongHandler) GetSongs(c *gin.Context) {
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))    //Номер страницы (по умолчанию 1)
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10")) //Количество песен на странице (по умолчанию 10)
+	offset := limit * (page - 1)
+
+	group := c.Query("group") //фильтр по группе
+	song := c.Query("song")   //фмльтр по песне
+	// releaseDate := c.Query("releaseDate") //фильтр по дате релиза
+
+	query := h.DB.Model(&models.Song{})
+
+	if group != "" {
+		query = query.Where(`"group" = ?`, group) // Экранирую "group"
+	}
+	if song != "" {
+		query = query.Where("song = ?", song)
+	}
+	// if releaseDate != "" {
+	// 	query = query.Where("releaseDate = ?", releaseDate)
+	// }
+
+	sortOrder := c.Query("sort")
+
+	if sortOrder == "asc" {
+		query = query.Order("release_date ASC") //сортировка по возростанию
+	} else if sortOrder == "desc" {
+		query = query.Order("release_date DESC") //сортировка по убыванию
+	} else {
+		query = query.Order("release_date ASC") //по умолчанию сортировка по возростанию
+	}
+
 	var songs []models.Song
-	h.DB.Find(&songs)
-	c.JSON(http.StatusOK, songs)
+	query.Offset(offset).Limit(limit).Find(&songs)
+
+	c.JSON(http.StatusOK, gin.H{
+		"page":  page,
+		"limit": limit,
+		"sort":  sortOrder,
+		"songs": songs,
+	})
 }
 
 // Получить текст песни по ID
@@ -93,8 +138,39 @@ func (h *SongHandler) DeleteSong(c *gin.Context) {
 // @Success 201 {object} models.Song
 // @Router /songs [post]
 func (h *SongHandler) AddSong(c *gin.Context) {
-	var song models.Song
-	c.BindJSON(&song)
+
+	var request struct {
+		Group       string `json:"group"`
+		Song        string `json:"song"`
+		ReleaseDate string `json:"releaseDate"` // Используем строку для разбора
+		Text        string `json:"text"`
+		Link        string `json:"link"`
+	}
+
+	err := c.BindJSON(&request)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Println(err)
+		return
+	}
+
+	releaseDate, err := time.Parse("02.01.2006", request.ReleaseDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		log.Println(err)
+		return
+	}
+
+	song := models.Song{
+		Group:       request.Group,
+		Song:        request.Song,
+		ReleaseDate: releaseDate,
+		Text:        request.Text,
+		Link:        request.Link,
+	}
+
 	h.DB.Create(&song)
 	c.JSON(http.StatusOK, song)
 }
