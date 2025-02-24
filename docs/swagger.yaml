@@ -3,8 +3,6 @@ definitions:
   models.Song:
     description: Модель песни
     properties:
-      SongDetail:
-        $ref: '#/definitions/models.SongDetails'
       group:
         description: Название группы
         type: string
@@ -13,6 +11,7 @@ definitions:
         type: string
     type: object
   models.SongDetails:
+    description: Модель дополнительных данных песни
     properties:
       link:
         description: Ссылка на песню
@@ -44,12 +43,20 @@ paths:
         in: query
         name: song
         type: string
-      - description: Поле для сортировки
+      - description: Фильтр по ссылке
+        in: query
+        name: link
+        type: string
+      - description: Фильтр по тексту или фрагменту тектса
+        in: query
+        name: text
+        type: string
+      - description: Поле для сортировки asc для возрастания и desc для убывания
         in: query
         name: sort
         type: string
       - default: 1
-        description: Номер страницы
+        description: Номер страницы(пагинация)
         in: query
         name: page
         type: integer
@@ -125,9 +132,13 @@ paths:
       - description: Данные песни
         in: body
         name: song
-        required: true
         schema:
           $ref: '#/definitions/models.Song'
+      - description: Дополнительные данные песни
+        in: body
+        name: songDetails
+        schema:
+          $ref: '#/definitions/models.SongDetails'
       produces:
       - application/json
       responses:
@@ -148,6 +159,16 @@ paths:
         in: path
         name: id
         required: true
+        type: integer
+      - default: 1
+        description: Номер страницы(пагинация)
+        in: query
+        name: page
+        type: integer
+      - default: 5
+        description: Лимит куплетов на странице
+        in: query
+        name: limit
         type: integer
       produces:
       - application/json

@@ -43,14 +43,26 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Поле для сортировки",
+                        "description": "Фильтр по ссылке",
+                        "name": "link",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Фильтр по тексту или фрагменту тектса",
+                        "name": "text",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Поле для сортировки asc для возрастания и desc для убывания",
                         "name": "sort",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "Номер страницы",
+                        "description": "Номер страницы(пагинация)",
                         "name": "page",
                         "in": "query"
                     },
@@ -132,9 +144,16 @@ const docTemplate = `{
                         "description": "Данные песни",
                         "name": "song",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/models.Song"
+                        }
+                    },
+                    {
+                        "description": "Дополнительные данные песни",
+                        "name": "songDetails",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/models.SongDetails"
                         }
                     }
                 ],
@@ -198,6 +217,20 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Номер страницы(пагинация)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Лимит куплетов на странице",
+                        "name": "limit",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -216,9 +249,6 @@ const docTemplate = `{
             "description": "Модель песни",
             "type": "object",
             "properties": {
-                "SongDetail": {
-                    "$ref": "#/definitions/models.SongDetails"
-                },
                 "group": {
                     "description": "Название группы",
                     "type": "string"
@@ -230,6 +260,7 @@ const docTemplate = `{
             }
         },
         "models.SongDetails": {
+            "description": "Модель дополнительных данных песни",
             "type": "object",
             "properties": {
                 "link": {

@@ -48,9 +48,9 @@ func main() {
 		log.Fatal("Не удалось подключиться к базе данных", err)
 	}
 
-	db.Debug()
+	db = db.Debug()
 
-	db.AutoMigrate(&models.Song{})
+	db.AutoMigrate(&models.Song{}, &models.SongDetails{})
 
 	songHandler := handlers.NewSongHandler(db)
 
