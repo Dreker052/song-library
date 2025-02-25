@@ -83,6 +83,18 @@ const docTemplate = `{
                                 "$ref": "#/definitions/models.Song"
                             }
                         }
+                    },
+                    "400": {
+                        "description": "Неверный формат параметров запроса",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 }
             },
@@ -115,6 +127,18 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/models.Song"
                         }
+                    },
+                    "400": {
+                        "description": "Песня уже добавлена",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка при получении данных от внешнего API",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 }
             }
@@ -145,15 +169,7 @@ const docTemplate = `{
                         "name": "song",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/models.Song"
-                        }
-                    },
-                    {
-                        "description": "Дополнительные данные песни",
-                        "name": "songDetails",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/models.SongDetails"
+                            "$ref": "#/definitions/models.SongWithDetails"
                         }
                     }
                 ],
@@ -162,6 +178,24 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.Song"
+                        }
+                    },
+                    "400": {
+                        "description": "Неверный формат даты. Ожидаемый формат: DD.MM.YYYY",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Детали песни не найдены",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }
@@ -190,6 +224,18 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "Песня успешно удалена",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Песня не найдена",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка при удалении песни",
                         "schema": {
                             "type": "string"
                         }
@@ -239,6 +285,24 @@ const docTemplate = `{
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    "400": {
+                        "description": "Неверный формат параметров запроса",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Текст песни отсутствует",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Внутренняя ошибка сервера",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 }
             }
@@ -265,15 +329,35 @@ const docTemplate = `{
             "properties": {
                 "link": {
                     "description": "Ссылка на песню",
-                    "type": "string"
+                    "type": "string",
+                    "example": ""
                 },
                 "releaseDate": {
                     "description": "Дата выхода песни",
-                    "type": "string"
+                    "type": "string",
+                    "example": ""
                 },
                 "text": {
                     "description": "Текст песни",
-                    "type": "string"
+                    "type": "string",
+                    "example": ""
+                }
+            }
+        },
+        "models.SongWithDetails": {
+            "description": "Модель песни c дополнительными данными песни",
+            "type": "object",
+            "properties": {
+                "SongDetails": {
+                    "$ref": "#/definitions/models.SongDetails"
+                },
+                "group": {
+                    "type": "string",
+                    "example": ""
+                },
+                "song": {
+                    "type": "string",
+                    "example": ""
                 }
             }
         }

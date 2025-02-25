@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -40,20 +41,26 @@ func NewSongHandler(db *gorm.DB) *SongHandler {
 // @Param page query int false "Номер страницы(пагинация)" default(1)
 // @Param limit query int false "Лимит записей на странице" default(10)
 // @Success 200 {array} models.Song
+// @Failure 400 {string} string "Неверный формат параметров запроса"
+// @Failure 500 {string} string "Внутренняя ошибка сервера"
 // @Router /songs [get]
 func (h *SongHandler) GetSongs(c *gin.Context) {
 
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1")) //Номер страницы (по умолчанию 1)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
+			"error": "Некоректное значение page",
 		})
+		log.Printf("Некоректное значение page, %v", err)
+		return
 	}
 	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10")) //Количество песен на странице (по умолчанию 10)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
+			"error": "Некоректное значение limit",
 		})
+		log.Printf("Некоректное значение limit, %v", err)
+		return
 	}
 
 	if page < 1 {
@@ -92,11 +99,11 @@ func (h *SongHandler) GetSongs(c *gin.Context) {
 	sortOrder := c.Query("sort")
 
 	if sortOrder == "asc" {
-		query = query.Order("release_date ASC") //сортировка по возростанию
+		query = query.Order("TO_DATE(release_date, 'DD.MM.YYYY') ASC") //сортировка по возростанию
 	} else if sortOrder == "desc" {
-		query = query.Order("release_date DESC") //сортировка по убыванию
+		query = query.Order("TO_DATE(release_date, 'DD.MM.YYYY') DESC") //сортировка по убыванию
 	} else {
-		query = query.Order("release_date ASC") //по умолчанию сортировка по возростанию
+		query = query.Order("TO_DATE(release_date, 'DD.MM.YYYY') ASC") //по умолчанию сортировка по возростанию
 	}
 
 	var songs []models.Song
@@ -120,6 +127,10 @@ func (h *SongHandler) GetSongs(c *gin.Context) {
 // @Param page query int false "Номер страницы(пагинация)" default(1)
 // @Param limit query int false "Лимит куплетов на странице" default(5)
 // @Success 200 {string} string "Текст песни"
+// @Failure 400 {string} string "Неверный формат параметров запроса"
+// @Failure 404 {string} string "Песня не найдена"
+// @Failure 404 {string} string "Текст песни отсутствует"
+// @Failure 500 {string} string "Внутренняя ошибка сервера"
 // @Router /songs/{id}/text [get]
 func (h *SongHandler) GetSongText(c *gin.Context) {
 	songId := c.Param("id")
@@ -127,21 +138,25 @@ func (h *SongHandler) GetSongText(c *gin.Context) {
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
+			"error": "Некоректное значение page",
 		})
+		log.Printf("Некоректное значение page, %v", err)
+		return
 	}
 	limit, err := strconv.Atoi(c.DefaultQuery("limit", "5"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
+			"error": "Некоректное значение limit",
 		})
+		log.Printf("Некоректное значение limit, %v", err)
+		return
 	}
 
 	if page < 1 {
 		page = 1
 	}
 	if limit < 0 {
-		limit = 0
+		limit = 10
 	}
 
 	var songDetails models.SongDetails
@@ -151,6 +166,12 @@ func (h *SongHandler) GetSongText(c *gin.Context) {
 			"error": "Песня не найдена",
 		})
 		log.Println(err)
+		return
+	}
+
+	if songDetails.Text == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Текст песни отсутствует"})
+		return
 	}
 
 	verses := strings.Split(songDetails.Text, "\n\n")
@@ -178,91 +199,122 @@ func (h *SongHandler) GetSongText(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "ID песни"
-// @Param song body models.Song false "Данные песни"
-// @Param songDetails body models.SongDetails false "Дополнительные данные песни"
+// @Param song body models.SongWithDetails false "Данные песни"
 // @Success 200 {object} models.Song
+// @Failure 400 {string} string "Неверный формат данных"
+// @Failure 400 {string} string "Неверный формат даты. Ожидаемый формат: DD.MM.YYYY"
+// @Failure 404 {string} string "Песня не найдена"
+// @Failure 404 {string} string "Детали песни не найдены"
+// @Failure 500 {string} string "Внутренняя ошибка сервера"
 // @Router /songs/{id} [put]
 func (h *SongHandler) EditSong(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
+			"error": "Некоректное значение id",
 		})
+		log.Printf("Некоректное значение id, %v\n", err)
+		return
 	}
 
-	var song models.Song
+	var songWithDetails models.SongWithDetails //использую специальную структуру для получения тела запроса
 
-	// Десериализуем запрос
-	if err := c.BindJSON(&song); err != nil {
+	if err := c.BindJSON(&songWithDetails); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат данных"})
 		log.Println(err)
 		return
 	}
 
-	log.Printf("%+v\n", song)
+	if songWithDetails.SongDetails.ReleaseDate != "" {
+		_, err = time.Parse("02.01.2006", songWithDetails.SongDetails.ReleaseDate) //проверяем коректность введеной даты
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат даты. Ожидаемый формат: DD.MM.YYYY"})
+			log.Printf("Неверный формат даты, %v\n", err)
+			return
+		}
+	}
 
-	// releaseDate, err := time.Parse("02.01.2006", request.SongDetails.ReleaseDate) //преобразуем строку в time.Time
-	// if err != nil {
-	// 	c.JSON(http.StatusBadRequest, gin.H{
-	// 		"error": "Некоректная дата релиза",
-	// 	})
-	// 	log.Printf("ошибка парсинга даты релиза песни: %v", err)
-	// }
+	log.Printf("Тело запроса: %+v\n", songWithDetails)
 
-	// song := models.Song{
-	// 	Id:    id,
-	// 	Song:  request.Song,
-	// 	Group: request.Group,
-	// }
-
-	// songDetails := models.SongDetails{
-	// 	SongId:      id,
-	// 	Text:        request.SongDetails.Text,
-	// 	ReleaseDate: releaseDate,
-	// 	Link:        request.SongDetails.Link,
-	// }
-
-	log.Printf("%+v\n", song)
+	var song models.Song
+	var songDetails models.SongDetails
 
 	if err := h.DB.First(&song, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Песня не найдена"})
-		log.Println(err)
+		log.Printf("Детали песни не найдены, %v", err)
 		return
 	}
 
-	log.Printf("%+v\n", song)
+	if err := h.DB.First(&songDetails, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Детали песни не найдены"})
+		log.Printf("Детали песни не найдены, %v", err)
+		return
+	}
 
-	// if err := h.DB.First(&songDetails, id).Error; err != nil {
-	// 	c.JSON(http.StatusNotFound, gin.H{"error": "Детали песни не найдены"})
-	// 	log.Println(err)
-	// 	return
-	// }
+	song = models.Song{
+		Id:    id,
+		Song:  songWithDetails.Song,
+		Group: songWithDetails.Group,
+	}
 
-	// log.Printf("%+v\n", songDetails)
+	songDetails = models.SongDetails{
+		SongId:      id,
+		Text:        songWithDetails.SongDetails.Text,
+		Link:        songWithDetails.SongDetails.Link,
+		ReleaseDate: songWithDetails.SongDetails.ReleaseDate,
+	}
 
-	// if err := h.DB.Save(&song).Error; err != nil {
-	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось обновить песню"})
-	// 	return
-	// }
+	tx := h.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось обновить данные песни"})
+		log.Printf("Детали песни не найдены, %v\n", tx.Error.Error())
+		return
+	}
 
-	// // Обновляем данные деталей песни с использованием Save
-	// if err := h.DB.Save(&songDetails).Error; err != nil {
-	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось обновить детали песни"})
-	// 	return
-	// }
+	if err := tx.Model(&song).Where("id = ?", id).Updates(&song).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось обновить данные песни"})
+		log.Printf("Детали песни не найдены, %v\n", err)
+		return
+	}
 
-	// if err := h.DB.Model(&song).Where("id = ?", id).Updates(&song).Error; err != nil {
-	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось обновить песню"})
-	// 	return
-	// }
+	if err := tx.Model(&songDetails).Where("song_id = ?", id).Updates(&songDetails).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось обновить детали песни"})
+		log.Printf("Детали песни не найдены, %v\n", err)
+		return
+	}
 
-	// // Обновляем запись деталей песни
-	// if err := h.DB.Model(&songDetails).Where("song_id = ?", id).Updates(&songDetails).Error; err != nil {
-	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось обновить детали песни"})
-	// 	return
-	// }
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("Детали песни не найдены, %v\n", err)
+		return
+	}
 
-	//c.JSON(http.StatusOK, song)
+	if err := h.DB.First(&song, id).Error; err != nil { //для вывода обновленных данных
+		c.JSON(http.StatusNotFound, gin.H{"error": "Песня не найдена"})
+		log.Printf("Детали песни не найдены, %v\n", err)
+		return
+	}
+
+	if err := h.DB.First(&songDetails, id).Error; err != nil { //для вывода обновленных данных
+		c.JSON(http.StatusNotFound, gin.H{"error": "Детали песни не найдены"})
+		log.Printf("Детали песни не найдены, %v\n", err)
+		return
+	}
+
+	songWithDetails = models.SongWithDetails{
+		Song:  song.Song,
+		Group: song.Group,
+		SongDetails: models.SongDetails{
+			SongId:      songDetails.SongId,
+			Text:        songDetails.Text,
+			Link:        songDetails.Link,
+			ReleaseDate: songDetails.ReleaseDate,
+		},
+	}
+
+	c.JSON(http.StatusOK, songWithDetails)
 }
 
 // Удалить песню по ID
@@ -273,41 +325,52 @@ func (h *SongHandler) EditSong(c *gin.Context) {
 // @Produce json
 // @Param id path int true "ID песни"
 // @Success 200 {string} string "Песня успешно удалена"
+// @Failure 404 {string} string "Песня не найдена"
+// @Failure 500 {string} string "Ошибка при удалении песни"
 // @Router /songs/{id} [delete]
 func (h *SongHandler) DeleteSong(c *gin.Context) {
 	id := c.Param("id")
 	var song models.Song
 	var songDetails models.SongDetails
 
+	if err := h.DB.First(&songDetails, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Песня не найдена"})
+		log.Printf("Песня не найдена, %v\n", err)
+		return
+	}
+
 	tx := h.DB.Begin() //Начало транзакции
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": tx.Error.Error(),
+			"error": "Не удалось удалить данные песни",
 		})
-		log.Println(tx.Error)
+		log.Printf("Не удалось удалить данные песни, %v\n", tx.Error)
 		return
 	}
 
 	if tx.Delete(&songDetails, id).Error != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": tx.Error.Error(),
+			"error": "Не удалось удалить данные песни",
 		})
+		log.Printf("Не удалось удалить данные песни, %v\n", tx.Error)
 		return
 	}
 
 	if tx.Delete(&song, id).Error != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": tx.Error.Error(),
+			"error": "Не удалось удалить данные песни",
 		})
+		log.Printf("Не удалось удалить данные песни, %v\n", tx.Error)
 		return
 	}
 
 	if tx.Commit().Error != nil { //подтверждение транзакции
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": tx.Error.Error(),
+			"error": "Не удалось удалить данные песни",
 		})
+		log.Printf("Не удалось удалить данные песни, %v\n", tx.Error)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Песня удалена"})
@@ -321,6 +384,10 @@ func (h *SongHandler) DeleteSong(c *gin.Context) {
 // @Produce json
 // @Param song body models.Song true "Данные песни"
 // @Success 201 {object} models.Song
+// @Failure 400 {string} string "Неверный формат данных"
+// @Failure 500 {string} string "Ошибка при добавлении песни"
+// @Failure 500 {string} string "Ошибка при получении данных от внешнего API"
+// @Failure 400 {string} string "Песня уже добавлена"
 // @Router /songs [post]
 func (h *SongHandler) AddSong(c *gin.Context) {
 
@@ -328,35 +395,37 @@ func (h *SongHandler) AddSong(c *gin.Context) {
 
 	err := c.BindJSON(&song)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный формат данных"})
+		log.Printf("Неверный формат данных, %v\n", err)
 		return
 	}
 
-	songDetails, err := GetSongInfo(song.Song, song.Group)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		log.Println(err)
+	if h.DB.First(&song).Error == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Песня уже добавлена"})
+		log.Println("Песня уже добавлена")
 		return
+	}
+
+	songDetails, err := GetSongInfo(song.Song, song.Group) //получаем доп данные песни
+	if err != nil {
+		log.Println(err)
 	}
 
 	tx := h.DB.Begin() //начало транзакции, чтобы данные добавлялись в обе таблицы атомарно
 	if tx.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": tx.Error.Error(),
+			"error": "Не удалось добавить песню",
 		})
-		log.Println(tx.Error)
+		log.Printf("Не удалось добавить данные песни, %v\n", tx.Error)
 		return
 	}
 
 	if tx.Create(&song).Error != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": tx.Error.Error(),
+			"error": "Не удалось добавить песню",
 		})
-		log.Println(tx.Error)
+		log.Printf("Не удалось добавить данные песни, %v\n", tx.Error)
 		return
 	}
 
@@ -365,17 +434,17 @@ func (h *SongHandler) AddSong(c *gin.Context) {
 	if tx.Create(&songDetails).Error != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": tx.Error.Error(),
+			"error": "Не удалось добавить песню",
 		})
-		log.Println(tx.Error)
+		log.Printf("Не удалось добавить данные песни, %v\n", tx.Error)
 		return
 	}
 
 	if tx.Commit().Error != nil { //подтверждение транзакции
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": tx.Error.Error(),
+			"error": "Не удалось добавить песню",
 		})
-		log.Println(tx.Error)
+		log.Printf("Не удалось добавить данные песни, %v\n", tx.Error)
 		return
 	}
 
@@ -386,19 +455,19 @@ func (h *SongHandler) AddSong(c *gin.Context) {
 
 func GetSongInfo(song string, group string) (*models.SongDetails, error) { //отправляет запрос на сторонее API для получения информации о песне
 
-	var request struct {
-		ReleaseDate string `json:"releaseDate"` // Используем строку для разбора
-		Text        string `json:"text"`
-		Link        string `json:"link"`
-	}
+	var songDetails models.SongDetails
 
-	url := fmt.Sprintf("http://localhost:8081/info?song=%s&group=%s", url.QueryEscape(song), url.QueryEscape(song))
+	url := fmt.Sprintf("%s/info?song=%s&group=%s", os.Getenv("API_DOMAIN"), url.QueryEscape(song), url.QueryEscape(song))
 
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка при получении ответа от сервера: %v", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ошибка при получении данных от API: статус %d", resp.StatusCode)
+	}
 
 	log.Println("Получен ответ от API", url)
 
@@ -407,29 +476,17 @@ func GetSongInfo(song string, group string) (*models.SongDetails, error) { //о�
 		return nil, fmt.Errorf("ошибка при получении тела ответа от сервера: %v", err)
 	}
 
-	// if len(data) == 0 {
-	// 	return nil, nil
-	// }
+	if len(data) == 0 { //на случай если в API не будет доп данных о песне, мы их просто не добавляем
+		songDetails = models.SongDetails{Link: "", Text: "", ReleaseDate: ""}
+		return &songDetails, fmt.Errorf("дополнительные данные песни не найдены")
+	}
 
 	log.Printf("Получен тело ответа от API %v\n%v", url, string(data))
 
-	err = json.Unmarshal(data, &request)
+	err = json.Unmarshal(data, &songDetails)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка при анмаршалинге ответа от сервера: %v", err)
 	}
 
-	log.Printf("%+v\n", request)
-
-	releaseDate, err := time.Parse("02.01.2006", request.ReleaseDate) //преобразуем строку в time.Time
-	if err != nil {
-		return nil, fmt.Errorf("ошибка парсинга даты релиза песни: %v", err)
-	}
-
-	songDetail := models.SongDetails{
-		Text:        request.Text,
-		ReleaseDate: releaseDate,
-		Link:        request.Link,
-	}
-
-	return &songDetail, nil
+	return &songDetails, nil
 }

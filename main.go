@@ -50,7 +50,10 @@ func main() {
 
 	db = db.Debug()
 
-	db.AutoMigrate(&models.Song{}, &models.SongDetails{})
+	err = db.AutoMigrate(&models.Song{}, &models.SongDetails{}) //делаем миграцию(создаем таблицы в базе данных)
+	if err != nil {
+		log.Printf("Не удалось совершить миграцию, %v\n", err)
+	}
 
 	songHandler := handlers.NewSongHandler(db)
 

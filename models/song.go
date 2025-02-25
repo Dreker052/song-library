@@ -1,9 +1,5 @@
 package models
 
-import (
-	"time"
-)
-
 // Song представляет собой модель песни.
 // @Description Модель песни
 type Song struct {
@@ -16,8 +12,16 @@ type Song struct {
 // SongDetails представляет собой модель дополнительных данных песни.
 // @Description Модель дополнительных данных песни
 type SongDetails struct {
-	SongId      int       `swaggerignore:"true"` //Внешний ключ
-	Text        string    `json:"text"`          //Текст песни
-	ReleaseDate time.Time `json:"releaseDate"`   //Дата выхода песни
-	Link        string    `json:"link"`          //Ссылка на песню
+	SongId      int    `swaggerignore:"true"`          //Внешний ключ
+	Text        string `json:"text" example:""`        //Текст песни
+	ReleaseDate string `json:"releaseDate" example:""` //Дата выхода песни
+	Link        string `json:"link" example:""`        //Ссылка на песню
+}
+
+// SongWithDetails представляет собой модель песни с дополнительными данными песни.
+// @Description Модель песни c дополнительными данными песни
+type SongWithDetails struct {
+	Group       string      `json:"group" example:""`
+	Song        string      `json:"song" example:""`
+	SongDetails SongDetails `json:"SongDetails"`
 }
